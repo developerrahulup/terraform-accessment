@@ -1,0 +1,88 @@
+# values.yaml
+image:
+  repository: my-app
+  tag: latest
+
+service:
+  port: 80
+  targetPort: 5000
+
+ingress:
+  enabled: true
+  host: my-app.example.com
+
+# templates/deployment.yaml
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "my-app-chart.fullname" . }}
+  labels:
+    app: {{ include "my-app-chart.name" . }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ include "my-app-chart.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "my-app-chart.name" . }}
+    spec:
+      containers:
+        - name: {{ include "my-app-chart.name" . }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          ports:
+            - containerPort: {{ .Values.service.targetPort }}
+
+---
+
+# postgresql.yaml
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-app-db-secret
+type: Opaque
+data:
+  postgresql-password: {{ .Values.postgresql.password | b64enc }}
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-app-db-service
+spec:
+  selector:
+    app: my-app
+  ports:
+    - port: 5432
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app-db-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-app-db
+  template:
+    metadata:
+      labels:
+        app: my-app-db
+    spec:
+      containers:
+        - name: my-app-db
+          image: postgres:12.7
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: my-app-db-secret
+                  key: postgresql-password
+          ports:
+            - containerPort: 5432
